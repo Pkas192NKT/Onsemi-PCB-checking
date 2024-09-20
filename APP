@@ -1,0 +1,196 @@
+import sys
+from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton, QVBoxLayout, QWidget, QLineEdit, QDialog, QGridLayout, QGroupBox
+from PyQt5.QtGui import QPixmap, QFont
+from PyQt5.QtCore import QByteArray, Qt, QTimer
+import cv2
+import pickle
+import cvzone
+import numpy as np
+import time
+
+image = cv2.imread('D:/anh/Edited_pic/output_image_2.bmp')
+with open('C:/Users/ADMIN/Documents/Zalo Received Files/video_pcb/PCBposition', 'rb') as f:
+    posList = pickle.load(f)
+width, height = 32, 26
+
+class LoginWindow(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle('Cửa sổ đăng nhập')
+        self.setGeometry(100, 100, 400, 200)  # Adjusted window size for better spacing
+        layout = QGridLayout()
+
+        # Logo
+        self.logo = QLabel(self)
+        pixmap = QPixmap('C:/Users/ADMIN/Downloads/01_logobachkhoatoi.png')
+        scaled_pixmap = pixmap.scaled(200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation)  # Adjusted size
+        self.logo.setPixmap(scaled_pixmap)
+        self.logo.setAlignment(Qt.AlignCenter)  # Center the logo
+        layout.addWidget(self.logo, 0, 0, 1, 2)
+
+        # Username
+        self.label_user = QLabel('Tài khoản:')
+        self.input_user = QLineEdit()
+        layout.addWidget(self.label_user, 1, 0)
+        layout.addWidget(self.input_user, 1, 1)
+
+        # Password
+        self.label_pass = QLabel('Mật khẩu:')
+        self.input_pass = QLineEdit()
+        self.input_pass.setEchoMode(QLineEdit.Password)
+        layout.addWidget(self.label_pass, 2, 0)
+        layout.addWidget(self.input_pass, 2, 1)
+
+        # Login button
+        self.button_login = QPushButton('Đăng nhập')
+        self.button_login.clicked.connect(self.check_login)
+        layout.addWidget(self.button_login, 3, 0, 1, 2)
+
+        self.setLayout(layout)
+
+    
+    def check_login(self):
+        if self.input_user.text() == 'admin' and self.input_pass.text() == 'password':
+            self.accept()
+        else:
+            self.input_user.clear()
+            self.input_pass.clear()
+            self.input_user.setPlaceholderText('Sai tài khoản hoặc mật khẩu')
+
+class MainWindow(QMainWindow):
+    def __init__(self, image_data):
+        super().__init__()
+        self.image_data = image_data
+        self.setWindowTitle("Hiển thị hình ảnh từ biến")
+        self.setGeometry(100, 100, 2000, 1200)
+        self.i=0
+        # Tạo widget trung tâm
+        central_widget = QWidget(self)
+        self.setCentralWidget(central_widget)
+        
+        # Tạo nút bấm
+        self.button_group = QGroupBox("Chức năng", central_widget)
+        self.button_group.setGeometry(1600, 200, 200, 200)
+        button_layout = QVBoxLayout()
+        self.bell_conveyor = QPushButton("Nhấn để khởi động băng tải", central_widget)
+        self.bell_conveyor.setGeometry(1600, 200, 180, 80)  # Đặt vị trí và kích thước của nút nhấn
+        self.bell_conveyor.clicked.connect(self.on_conveyor_click)
+        button_layout.addWidget(self.bell_conveyor)
+        self.Camera = QPushButton("Kết nối Camera")
+        self.Camera.setGeometry(1600, 300, 180, 80)  # Đặt vị trí và kích thước của nút nhấn
+        self.Camera.clicked.connect(self.on_camera_click)
+        button_layout.addWidget(self.Camera)
+        self.button_group.setLayout(button_layout)
+        self.camera_label = QLabel("Camera", central_widget)
+        self.camera_label.setGeometry(1500, 700, 180, 50)
+        self.camera_label.setAlignment(Qt.AlignLeft)
+        font = QFont()
+        font.setPointSize(25)  # Increase the font size
+        font.setBold(True)  # Make the font bold
+        self.camera_label.setFont(font)
+        self.color_square_cam = QLabel(central_widget)
+        self.color_square_cam.setGeometry(1750, 700, 50, 50)
+        self.color_square_cam.setStyleSheet("background-color: grey")
+        self.bell_label = QLabel("Băng tải", central_widget)
+        self.bell_label.setGeometry(1500, 600, 180, 50)
+        self.bell_label.setAlignment(Qt.AlignLeft)
+        font = QFont()
+        font.setPointSize(25)  # Increase the font size
+        font.setBold(True)  # Make the font bold
+        self.bell_label.setFont(font)
+        self.color_square_bell = QLabel(central_widget)
+        self.color_square_bell.setGeometry(1750, 600, 50, 50)
+        self.color_square_bell.setStyleSheet("background-color: grey")
+        # Tạo label
+        self.mini_logo = QLabel(central_widget)
+        self.mini_logo.setGeometry(1580, 20, 200, 200)
+        pixmap = QPixmap('C:/Users/ADMIN/Downloads/01_logobachkhoatoi.png')
+        scaled_pixmap = pixmap.scaled(200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.mini_logo.setPixmap(scaled_pixmap)
+        
+        self.Cam_group = QGroupBox("Hình ảnh từ cam", central_widget)
+        self.Cam_group.setGeometry(20, 50, 1300, 1000)
+        Cam_layout = QVBoxLayout()
+        self.Cam_pic = QLabel(central_widget)
+        self.Cam_pic.setGeometry(50, 500, 1295, 425)  # Đặt vị trí và kích thước của label
+        Cam_layout.addWidget(self.Cam_pic)
+        self.real_pic = QLabel(central_widget)
+        self.real_pic.setGeometry(50, 100, 1295, 425)
+        Cam_layout.addWidget(self.real_pic)
+        self.Cam_group.setLayout(Cam_layout)
+    def on_camera_click(self):
+        if self.i%2 !=0:
+            self.Camera.setText('Kết nối thành công')
+            self.i = self.i+1
+            self.color_square_cam.setStyleSheet("background-color: green")
+            time.sleep(3)
+            pixmap_2 = QPixmap('D:/anh/PCB_on_track/Basler_acA3800-14uc__23661385__20240702_101525762_0014 (310).bmp')
+            scaled_pixmap_2 = pixmap_2.scaled(1295, 425, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.real_pic.setPixmap(scaled_pixmap_2)
+            QTimer.singleShot(1000, self.bell)
+        else:
+            self.i = self.i+1
+            self.Camera.setText('Đã ngắt kết nối Camera')
+            self.color_square_cam.setStyleSheet("background-color: gray")
+    def bell(self):
+        pixmap_3 = QPixmap('D:/anh/Edited_pic/output_image_2.bmp')
+        
+        self.real_pic.setPixmap(pixmap_3)
+        QTimer.singleShot(2000, self.classify)
+    def classify(self):
+        # Chuyển đổi numpy array thành QByteArray
+        success, encoded_image = cv2.imencode('.bmp', image)
+        byte_array = QByteArray(encoded_image.tobytes())
+        pixmap = QPixmap()
+        pixmap.loadFromData(byte_array, 'BMP')
+        self.Cam_pic.setPixmap(pixmap)
+        QTimer.singleShot(3000, self.remove)
+        
+    def on_conveyor_click(self):
+        if self.i %2 == 0:
+            self.i = self.i+1
+            self.bell_conveyor.setText('Khởi động thành công')
+            self.color_square_bell.setStyleSheet("background-color: green")
+        else:
+            self.i = self.i+1
+            self.bell_conveyor.setText('Nhấn để khởi động băng tải')
+            self.color_square_bell.setStyleSheet("background-color: gray")
+    def remove(self):
+        self.Cam_pic.setPixmap(QPixmap())
+        self.real_pic.setPixmap(QPixmap())
+if __name__ == "__main__":
+    def check_PCB_blank(img_process):
+        for pos in posList:
+            x,y = pos
+            image_crop = img_process[y:y+height, x:x+width]
+            #cv2.imshow(str(x*y), image_crop)
+            count = cv2.countNonZero(image_crop)
+            cvzone.putTextRect(image, str(count),(x+1,y+height-5), scale = 0.7, thickness = 1, offset = 0)
+            if count > 250:
+                color = (0,255,0)
+                thickness = 5 
+            if count > 420 and count < 430:
+                color =(255,0,0)
+                thickness = 5
+            if count <250:
+                color = (0,0,255)
+                thickness = 2
+            cv2.rectangle(image, pos, (pos[0]+width, pos[1]+height), color, thickness)
+
+    app = QApplication(sys.argv)
+    img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    img_blur = cv2.GaussianBlur(img_gray, (3,3), 1)
+    img_threshold = cv2.adaptiveThreshold(img_blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 25, 10)
+    img_median = cv2.medianBlur(img_threshold,5)
+    kernel = np.ones((3,3), np.uint8)
+    img_dilate = cv2.dilate(img_median, kernel, iterations = 1) 
+    
+    # Run:
+    check_PCB_blank(img_dilate)
+
+    login = LoginWindow()
+    if login.exec_() == QDialog.Accepted:
+        window = MainWindow(image)
+        window.show()
+        sys.exit(app.exec_())
+    
