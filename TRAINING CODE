@@ -1,0 +1,385 @@
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+import cv2 as cv
+from skimage.feature import graycomatrix, graycoprops
+from skimage import data
+import cv2 as cv
+from sklearn import svm
+import numpy as np
+import pywt
+import os 
+from sklearn import preprocessing
+import matplotlib.pyplot as plt
+from sklearn.ensemble import IsolationForest
+from sklearn.inspection import DecisionBoundaryDisplay
+from sklearn.metrics import f1_score
+from sklearn.metrics import make_scorer
+from sklearn.model_selection import GridSearchCV
+import scipy as sp
+from sklearn.metrics import roc_auc_score, average_precision_score
+import pickle
+from sklearn.cluster import KMeans
+
+
+def wavelet_img(img):
+    cols,rows = img.shape
+    img=cv.resize(img,(rows*2,cols*2))
+    # Apply bior3.9 wavelet transform
+    coeffs = pywt.dwt2(img, 'bior1.3')
+    cA, (cH, cV, cD) = coeffs # Only use the LL component
+    cA_norm = (cA - np.min(cA)) / (np.max(cA) - np.min(cA))
+    cH_norm = (cH - np.min(cH)) / (np.max(cH) - np.min(cH))
+    cV_norm = (cV - np.min(cV)) / (np.max(cV) - np.min(cV))#chon
+    cD_norm = (cD - np.min(cD)) / (np.max(cD) - np.min(cD))
+    cA_norm = (cA_norm * 255).astype(np.uint8)
+    cH_norm = (cH_norm * 255).astype(np.uint8)
+    cV_norm = (cV_norm * 255).astype(np.uint8)
+    cD_norm = (cD_norm * 255).astype(np.uint8)
+    print(cH_norm.shape)
+    return cV_norm,cA_norm,cD_norm,cH_norm
+
+    # img=cv.blur(img,(5,5))
+    # Apply bior3.9 wavelet transform
+    # blur=cv.blur(img,(90,90))
+    # diff=cv.absdiff(blur,img)
+
+def data_predict4(poslist5,image):
+    list_img_crop4=[]
+    pos_xy4=[]
+    for i in poslist5:
+        x4,y4=i
+        image4=image[i[1]+h:i[1]+2*h,i[0]+w+1:i[0]+2*w]
+        image4=cv.resize(image4,(w,h))
+        if image4.shape!=((h,w)):
+             continue
+        else:
+            pos_xy4.append((x4+w,y4+h))
+            list_img_crop4.append(image4)
+    return list_img_crop4,pos_xy4
+def data_predict5(poslist5,image):
+    list_img_crop5=[]
+    pos_xy5=[]
+    for i in poslist5:
+        x5,y5=i
+        image5=image[i[1]+h:i[1]+2*h,i[0]:i[0]+w]
+        image5=cv.resize(image5,(w,h))
+        if image5.shape!=((h, w)):
+             continue
+        else:
+            
+            pos_xy5.append((x5,y5+h))
+            list_img_crop5.append(image5)
+    return list_img_crop5,pos_xy5
+def data_predict6(poslist5,image):
+    list_img_crop6=[]
+    pos_xy6=[]
+    for i in poslist5:
+        x6,y6=i
+        image6=image[i[1]:i[1]+h,i[0]+w+2:i[0]+2*w]
+        image6=cv.resize(image6,(w,h))
+        if image6.shape!=((h, w)):
+             continue
+        else:
+            pos_xy6.append((x6+w+2,y6))
+            list_img_crop6.append(image6)
+    return list_img_crop6,pos_xy6
+
+def gray_matrix(image_size):
+    list_feature=[]
+    for patch in image_size:
+        glcm = graycomatrix(patch, distances=[1], angles= [0], levels=256,
+                            symmetric=True, normed=True)
+        features = []
+        for prop in ['homogeneity']:
+            #  'energy','contrast', 'homogeneity', 'energy', 'correlation','Dissimilarity
+            feature = graycoprops(glcm, prop)
+            features.append(feature)
+        list_feature.append(features)
+    return list_feature
+
+def cvt(xs):
+    xs=np.array(xs)
+    xs=xs.reshape(-1,2)
+    return xs
+
+def train_x(path):
+    dir_img=os.listdir(path)
+    image=[]
+    for i in dir_img:
+        img=cv.imread(f'{path}\{i}',0)
+        image.append(img)
+    return image
+def feature_image(images,d):
+
+    list_img_train=[]
+    for i in images:
+        list_img_train.append(i)
+        xs = gray_matrix(list_img_train)
+        # xs=cvt(xs)
+        list_img_train.append(xs)
+    return list_img_train
+
+def scaler1_(image_feature):
+    list_scaler=[]
+    for i in image_feature:
+        if len(i)!=0:
+            list_scaler.append(i)
+    return list_scaler
+def scaler2_(image_feature):
+    list_scaler=[]
+    for i in image_feature:
+        
+        if len(i)!=0:
+            list_scaler.append(i)
+    return list_scaler
+def compute_anomaly_threshold(scores, contamination):
+    # Tính toán ngưỡng cho phát hiện bất thường dựa trên điểm số và tỷ lệ ô nhiễm mong muốn
+    threshold = -sp.stats.scoreatpercentile(-scores, 100. * (1. - contamination))
+    return threshold
+def reshape_k_mean(list_compare_outlier_prd):
+    list_compare_outlier_prd=np.array(list_compare_outlier_prd)
+    list_compare_outlier_prd=list_compare_outlier_prd.reshape(-1,1)
+    return list_compare_outlier_prd
+def real_outlier_(label,list_compare_outlier_prd):
+    real_outlier=[]
+    unique_values, counts = np.unique(label, return_counts=True)
+    most_common_value = unique_values[np.argmax(counts)]
+    for i,pos in enumerate(label):
+            if pos==most_common_value:
+                real_outlier.append(list_compare_outlier_prd[i])
+    return real_outlier
+                 
+def threh(img_crop):
+    th=cv.threshold(img_crop,0,255,cv.THRESH_BINARY,cv.THRESH_OTSU)[1]
+    contour,_=cv.findContours(th,cv.RETR_EXTERNAL,cv.CHAIN_APPROX_SIMPLE)
+    for cnt in contour:
+        area = cv.contourArea(cnt)
+        print(f'dien là :{area}')
+if __name__=="__main__":
+    h,w=20,33
+    try:
+        with open('PCBposition','rb') as f:
+                poslist5=pickle.load(f)
+    except:
+            poslist5=[]
+
+    path=r'D:\anh\testpcb\train_svm\t5'
+    img=cv.imread(r'D:\anh\Edited_pic\output_image_3.bmp')
+    img_train=cv.imread(r'D:\anh\Edited_pic\output_image_2.bmp')
+    img_copy_train=img_train.copy()
+    # value1='homogeneity'
+    img_copy_train=cv.cvtColor(img_copy_train,cv.COLOR_BGR2GRAY)
+    
+    _,_,_,cH_norm_train=wavelet_img(img_copy_train)
+    print(cH_norm_train)
+    cH_norm_train=cv.bilateralFilter(cH_norm_train,2,75,75)
+    print(cH_norm_train)
+    list_img_crop_train,_=data_predict4(poslist5,cH_norm_train)
+    list_feature_train=gray_matrix(list_img_crop_train)
+    list_feature_train=np.array(list_feature_train)
+    list_feature_train=list_feature_train.reshape(-1,1)
+
+#1
+    list_img_crop_train1,_=data_predict5(poslist5,cH_norm_train)
+    list_feature_train1=gray_matrix(list_img_crop_train1)
+    list_feature_train1=np.array(list_feature_train1)
+    list_feature_train1=list_feature_train1.reshape(-1,1)
+
+
+#2
+    list_img_crop_train2,_=data_predict6(poslist5,cH_norm_train)
+    list_feature_train2=gray_matrix(list_img_crop_train2)
+    list_feature_train2=np.array(list_feature_train2)
+    list_feature_train2=list_feature_train2.reshape(-1,1)
+    # print(list_feature_train[0])
+
+
+
+    
+    img_copy=img.copy()
+    img_copy=cv.cvtColor(img_copy,cv.COLOR_BGR2GRAY)
+    # img_copy=cv.bilateralFilter(img_copy,1,175,175)
+    cV_norm,cA_norm,cD_norm,cH_norm=wavelet_img(img_copy)
+    cH_norm=cv.bilateralFilter(cH_norm,2,75,75)
+    print(cH_norm)
+
+    list_img_crop,list_position=data_predict4(poslist5,cH_norm)
+    
+    list_feature_prd=gray_matrix(list_img_crop)
+    list_feature_prd=np.array(list_feature_prd)
+    list_feature_prd=list_feature_prd.reshape(-1,1)
+
+
+    #1
+    list_img_crop1,list_position1=data_predict5(poslist5,cH_norm)
+    
+    list_feature_prd1=gray_matrix(list_img_crop1)
+    list_feature_prd1=np.array(list_feature_prd1)
+    list_feature_prd1=list_feature_prd1.reshape(-1,1)
+    # print(list_feature_prd[0])
+
+    #2
+    list_img_crop2,list_position2=data_predict6(poslist5,cH_norm)
+    
+    list_feature_prd2=gray_matrix(list_img_crop2)
+    list_feature_prd2=np.array(list_feature_prd2)
+    list_feature_prd2=list_feature_prd2.reshape(-1,1)
+
+
+    
+    
+    
+
+    contamination=0.0065
+    clf = IsolationForest(n_estimators=100,n_jobs=-1,max_samples='auto',contamination=contamination,random_state=42)
+    # clf = LocalOutlierFactor(n_neighbors=200, novelty=True,algorithm='auto', contamination=0.001)
+    
+
+
+    scaler=preprocessing.StandardScaler().fit(list_feature_train)
+    input=scaler.transform(list_feature_train)
+    
+    input_prd=scaler.transform(list_feature_prd)
+    
+
+   #1 
+    scaler1=preprocessing.StandardScaler().fit(list_feature_train1)
+    input1=scaler1.transform(list_feature_train1)
+
+    input_prd1=scaler1.transform(list_feature_prd1)
+
+
+    #2
+    scaler2=preprocessing.StandardScaler().fit(list_feature_train2)
+    input2=scaler2.transform(list_feature_train2)
+    
+    input_prd2=scaler2.transform(list_feature_prd2)
+ 
+    clf.fit(input)
+    clf.fit(input1)
+    clf.fit(input2)
+    
+    predict_label=clf.fit_predict(input)
+    predict_label_=clf.predict(input_prd)
+    predict_label_1=clf.predict(input_prd1)
+    predict_label_2=clf.predict(input_prd2)
+    
+
+    scores=(clf.score_samples(input1))
+    # print(np.min(scores))
+    threshold = np.percentile(scores, 99)
+    scores1=(clf.decision_function(input_prd))
+    scores2=(clf.decision_function(input_prd1))
+    scores3=(clf.decision_function(input_prd2))
+    # print(threshold)
+    # print(np.min(scores1))
+    
+   
+
+# Sử dụng ngưỡng để dự đoán các điểm dữ liệu là bất thường hoặc không bất thường 
+    list_compare_outlier_prd1=[]
+    list_compare_outlier_prd2=[]
+    list_compare_outlier_prd3=[]
+
+    for i,pos in enumerate(predict_label_):
+            if pos==-1:
+                # if scores[i]>-0.04823605573709333:
+                    list_compare_outlier_prd1.append(scores1[i])
+
+    for i,pos in enumerate(predict_label_1):
+            if pos==-1:
+            # if pos<=threshold1:
+                list_compare_outlier_prd2.append(scores2[i])
+
+    for i,pos in enumerate(predict_label_2):
+            if pos==-1:
+                list_compare_outlier_prd3.append(scores3[i])
+                # x = list_position2[i][0]
+                # y = list_position2[i][1]
+                #     # list_compare_outlier.append((x,y))
+                # cv.rectangle(img,(x,y),(x+30,y+20),(0,255,5),1)
+
+    list_compare_outlier_prd1=reshape_k_mean(list_compare_outlier_prd1)
+    list_compare_outlier_prd2=reshape_k_mean(list_compare_outlier_prd2)
+    list_compare_outlier_prd3=reshape_k_mean(list_compare_outlier_prd3)
+    print(clf.decision_function)
+    print(predict_label_)
+    print(predict_label_1)
+    print(predict_label_2)
+    # print(scores2)
+    # print(scores3)
+    
+    try:
+        kmeans = KMeans(n_clusters=3, random_state=0, n_init="auto").fit(list_compare_outlier_prd1)
+        label1=(kmeans.labels_)
+        real_outlier1=real_outlier_(label1,list_compare_outlier_prd1)
+        list_pos1=[]
+        for i,pos in enumerate(scores1):
+                if pos in real_outlier1:
+                    x = list_position[i][0]
+                    y = list_position[i][1]
+                    list_pos1.append(pos)
+                    cv.rectangle(img,(x,y),(x+2+33,y+20),(255,0,255),1)
+                    # cv.putText(img,str(i),(x,y),cv.FONT_HERSHEY_COMPLEX,0.8,(255,0,255))
+        print(list_pos1)
+    except:
+        pass
+    try:
+        kmeans2 = KMeans(n_clusters=3, random_state=0, n_init="auto").fit(list_compare_outlier_prd2)
+        label2=(kmeans2.labels_)
+        real_outlier2=real_outlier_(label2,list_compare_outlier_prd2)
+        list_pos2=[]
+        for i,pos in enumerate(scores2):
+                if pos in real_outlier2:
+                    x = list_position1[i][0]
+                    y = list_position1[i][1]
+                    list_pos2.append(pos)
+                    cv.rectangle(img,(x,y),(x+2+30,y+20),(255,255,0),1)
+                    # cv.putText(img,str(i),(x,y),cv.FONT_HERSHEY_COMPLEX,0.8,(255,255,0))
+        print(list_pos2)
+    except:
+        pass
+    try:
+        kmeans3 = KMeans(n_clusters=3, random_state=0, n_init="auto").fit(list_compare_outlier_prd3)
+        label3=(kmeans3.labels_)
+        label3=kmeans.predict(list_compare_outlier_prd3)
+        real_outlier3=real_outlier_(label3,list_compare_outlier_prd3)
+        list_pos3=[]
+        for i,pos in enumerate(scores3):
+                if pos in real_outlier3:
+                    x = list_position2[i][0]
+                    y = list_position2[i][1]
+                    list_pos3.append(pos)
+                    # cv.putText(img,str(i),(x,y),cv.FONT_HERSHEY_COMPLEX,0.8,(0,255,255))
+                    img_crop=img[y:y+h,x+3:x+w]
+                    img_crop=cv.cvtColor(img_crop,cv.COLOR_BGR2GRAY)
+                    th=cv.adaptiveThreshold(img_crop,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C,cv.THRESH_BINARY_INV,11,2)
+                    count=cv.countNonZero(th)
+                    print(f'dien là :{count}')
+                    if count>=200:
+                    # contour,_=cv.findContours(th,cv.RETR_EXTERNAL,cv.CHAIN_APPROX_SIMPLE)
+                    # cv.imshow(str(y),th)
+                    # for cnt in contour:
+                    #     area = cv.contourArea(cnt)
+                    #     print(f'dien là :{area}')
+                        cv.rectangle(img,(x+3,y),(x+33,y+20),(0,255,255),1)
+        print(list_pos3)
+
+    except:
+        pass
+    
+    # print(list_pos1)
+    # print(list_pos2)
+    # print(list_pos3)
+    
+    
+
+    cv.imshow('g',img)
+    # cv.imshow('g2',img1)
+    cv.waitKey()
+    cv.destroyAllWindows()
+
+    
